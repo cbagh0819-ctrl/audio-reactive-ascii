@@ -1,0 +1,1866 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CYBER-ASCII // 3D Hologram & Ultra-HD Braille True-Color Visualizer</title>
+  <style>
+    :root {
+      --bg: #040508;
+      --card-bg: rgba(12, 14, 22, 0.92);
+      --border: rgba(255, 255, 255, 0.12);
+      --border-bright: rgba(0, 243, 255, 0.45);
+      --accent: #00f3ff;
+      --accent-rgb: 0, 243, 255;
+      --accent-pink: #ff0055;
+      --accent-purple: #b026ff;
+      --text: #ffffff;
+      --text-muted: #8c96a5;
+      --font-mono: 'JetBrains Mono', 'Fira Code', 'Courier New', Courier, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font-mono);
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Screen Canvas Container */
+    #canvas-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at center, #0c0f1d 0%, #030407 100%);
+      cursor: grab;
+    }
+
+    #canvas-container.grabbing {
+      cursor: grabbing;
+    }
+
+    canvas {
+      display: block;
+      image-rendering: pixelated;
+    }
+
+    /* Subtle CRT Scanline Overlay */
+    .scanline-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 2;
+      pointer-events: none;
+      background: linear-gradient(rgba(0, 0, 0, 0) 50%, rgba(0, 0, 0, 0.3) 50%);
+      background-size: 100% 3px;
+      opacity: 0.35;
+      transition: opacity 0.3s;
+    }
+
+    /* Top HUD */
+    header {
+      position: absolute;
+      top: 14px;
+      left: 18px;
+      right: 18px;
+      z-index: 10;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      pointer-events: none;
+    }
+
+    .hud-box {
+      pointer-events: auto;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 7px 14px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    }
+
+    .hud-title {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 2px;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #444444;
+      transition: all 0.25s;
+    }
+
+    .status-dot.active {
+      background: #00ff88;
+      box-shadow: 0 0 10px #00ff88;
+    }
+
+    .ambient-meter-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    .meter-bar {
+      width: 48px;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .meter-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--accent);
+      transition: width 0.04s linear;
+    }
+
+    .meter-fill.bass { background: #ff0055; }
+    .meter-fill.mid { background: #00f3ff; }
+    .meter-fill.treble { background: #ffea00; }
+
+    .fps-text {
+      font-size: 10px;
+      color: var(--accent);
+      font-weight: 700;
+      margin-left: 2px;
+    }
+
+    .badge-holo {
+      background: rgba(176, 38, 255, 0.25);
+      border: 1px solid var(--accent-purple);
+      color: #df8fff;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      display: none;
+      animation: pulseGlow 2s infinite ease-in-out;
+    }
+
+    @keyframes pulseGlow {
+      0%, 100% { box-shadow: 0 0 5px rgba(176, 38, 255, 0.3); }
+      50% { box-shadow: 0 0 15px rgba(176, 38, 255, 0.7); }
+    }
+
+    /* Top Right Buttons */
+    .hud-actions {
+      pointer-events: auto;
+      display: flex;
+      gap: 8px;
+    }
+
+    .hud-btn {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: #ffffff;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: 11px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      letter-spacing: 0.5px;
+      transition: all 0.2s ease;
+      backdrop-filter: blur(8px);
+    }
+
+    .hud-btn:hover {
+      border-color: var(--accent);
+      color: #ffffff;
+      box-shadow: 0 0 10px rgba(var(--accent-rgb), 0.3);
+    }
+
+    .hud-btn.active {
+      background: rgba(var(--accent-rgb), 0.2);
+      border-color: var(--accent);
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    .hud-btn.holo-active {
+      background: rgba(176, 38, 255, 0.3);
+      border-color: var(--accent-purple);
+      color: #ffffff;
+      font-weight: 800;
+      box-shadow: 0 0 15px rgba(176, 38, 255, 0.5);
+    }
+
+    .hud-btn.yt-active {
+      background: rgba(255, 0, 85, 0.25);
+      border-color: #ff0055;
+      color: #ff0055;
+      font-weight: 700;
+      box-shadow: 0 0 12px rgba(255, 0, 85, 0.4);
+    }
+
+    /* 3D Navigation Hint Badge */
+    #holoHint {
+      position: absolute;
+      top: 68px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      background: rgba(18, 22, 34, 0.85);
+      border: 1px solid var(--accent-purple);
+      color: #e2c0ff;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 10px;
+      letter-spacing: 1px;
+      pointer-events: none;
+      display: none;
+      backdrop-filter: blur(8px);
+    }
+
+    /* Control Panel (Bottom) */
+    .control-panel {
+      position: absolute;
+      bottom: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-width: 95vw;
+      width: auto;
+      backdrop-filter: blur(14px);
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7);
+      transition: all 0.25s ease;
+    }
+
+    .control-panel.minimized {
+      transform: translateX(-50%) translateY(140%);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .panel-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .control-group {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .control-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+
+    /* Pill Buttons */
+    .pill-group {
+      display: flex;
+      background: rgba(0, 0, 0, 0.4);
+      padding: 2px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      gap: 2px;
+    }
+
+    .pill-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 5px 11px;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+
+    .pill-btn:hover {
+      color: #ffffff;
+    }
+
+    .pill-btn.active {
+      background: rgba(var(--accent-rgb), 0.2);
+      border: 1px solid rgba(var(--accent-rgb), 0.5);
+      color: #ffffff;
+      font-weight: 600;
+      box-shadow: 0 0 10px rgba(var(--accent-rgb), 0.25);
+    }
+
+    /* Sliders */
+    .slider-wrap {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 75px;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+      box-shadow: 0 0 6px var(--accent);
+    }
+
+    .custom-select {
+      background: rgba(0, 0, 0, 0.5);
+      border: 1px solid var(--border);
+      color: #ffffff;
+      font-family: inherit;
+      font-size: 11px;
+      padding: 5px 9px;
+      border-radius: 5px;
+      cursor: pointer;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .custom-select:hover, .custom-select:focus {
+      border-color: var(--accent);
+    }
+
+    /* Toast Notification */
+    #toast {
+      position: absolute;
+      top: 70px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-20px);
+      z-index: 50;
+      background: rgba(15, 20, 30, 0.95);
+      border: 1px solid var(--accent);
+      color: #ffffff;
+      padding: 7px 18px;
+      border-radius: 6px;
+      font-size: 11px;
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.25s ease;
+      letter-spacing: 0.5px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+    }
+
+    #toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* Initial Modal */
+    .modal-backdrop {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 100;
+      background: rgba(3, 4, 7, 0.92);
+      backdrop-filter: blur(10px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.3s;
+    }
+
+    .modal-backdrop.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .modal-card {
+      background: #0d101c;
+      border: 1px solid var(--border-bright);
+      border-radius: 10px;
+      padding: 30px 36px;
+      max-width: 500px;
+      width: 90%;
+      text-align: center;
+      box-shadow: 0 0 35px rgba(0, 243, 255, 0.2);
+    }
+
+    .modal-title {
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: 3px;
+      color: var(--accent);
+      margin-bottom: 10px;
+      text-transform: uppercase;
+      text-shadow: 0 0 10px rgba(0, 243, 255, 0.5);
+    }
+
+    .modal-desc {
+      font-size: 12px;
+      line-height: 1.7;
+      color: var(--text-muted);
+      margin-bottom: 22px;
+    }
+
+    .modal-options {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .modal-btn {
+      background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.25), rgba(176, 38, 255, 0.25));
+      color: #ffffff;
+      border: 1px solid var(--accent);
+      padding: 12px 24px;
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      cursor: pointer;
+      text-transform: uppercase;
+      width: 100%;
+      transition: all 0.2s;
+    }
+
+    .modal-btn:hover {
+      background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.45), rgba(176, 38, 255, 0.45));
+      box-shadow: 0 0 15px rgba(var(--accent-rgb), 0.4);
+      transform: translateY(-1px);
+    }
+
+    .modal-btn.secondary {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-muted);
+      border-color: rgba(255, 255, 255, 0.15);
+    }
+
+    .modal-btn.secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #ffffff;
+      border-color: #ffffff;
+    }
+
+    .toggle-panel-btn {
+      position: absolute;
+      bottom: 12px;
+      right: 16px;
+      z-index: 15;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-muted);
+      padding: 4px 8px;
+      font-size: 10px;
+      letter-spacing: 1px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .toggle-panel-btn:hover {
+      color: #ffffff;
+      border-color: #ffffff;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Screen Canvas -->
+  <div id="canvas-container">
+    <canvas id="asciiCanvas"></canvas>
+  </div>
+  <div class="scanline-overlay" id="scanlineOverlay"></div>
+  <div id="holoHint">⟁ 3D HOLOGRAM ACTIVE // Drag mouse to Orbit, Scroll to Zoom</div>
+
+  <!-- Hidden video element for YouTube / Tab capture -->
+  <video id="ytVideo" autoplay playsinline muted style="display: none;"></video>
+
+  <!-- Toast -->
+  <div id="toast">Audio Engine Active</div>
+
+  <!-- HUD Header -->
+  <header>
+    <div class="hud-box">
+      <div class="hud-title">
+        <div class="status-dot" id="audioStatusDot"></div>
+        <span>CYBER//ASCII</span>
+        <span class="badge-holo" id="holoBadge">3D HOLO ORBIT</span>
+      </div>
+      <div class="ambient-meter-group">
+        <span>AUDIO</span>
+        <div class="meter-bar"><div class="meter-fill" id="ambientLevelMeter"></div></div>
+      </div>
+      <div class="ambient-meter-group">
+        <span>BASS</span>
+        <div class="meter-bar" style="width: 34px;"><div class="meter-fill bass" id="bassMeter"></div></div>
+      </div>
+      <div class="ambient-meter-group">
+        <span>TREB</span>
+        <div class="meter-bar" style="width: 34px;"><div class="meter-fill treble" id="trebMeter"></div></div>
+      </div>
+      <span class="fps-text" id="fpsCounter">60 FPS</span>
+    </div>
+
+    <div class="hud-actions">
+      <button class="hud-btn" id="btnToggleHolo" title="Toggle 3D Hologram Depth Field [Z]">
+        <span>⟁</span>
+        <span id="holoBtnText">3D HOLOGRAM</span>
+      </button>
+      <button class="hud-btn" id="btnCaptureYT" title="Capture YouTube tab with 3D Hologram & Music Sync">
+        <span id="ytStatusText">▶ CAPTURE YOUTUBE</span>
+      </button>
+      <button class="hud-btn" id="btnToggleMic">
+        <span id="micStatusText">ENABLE MIC</span>
+      </button>
+      <button class="hud-btn" id="btnFullscreen">
+        <span>FULLSCREEN</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Bottom Visualizer Controls -->
+  <div class="control-panel" id="controlPanel">
+    <!-- Sketch Mode Selection -->
+    <div class="panel-row">
+      <div class="control-group">
+        <span class="control-label">Sketch:</span>
+        <div class="pill-group" id="sketchModePills">
+          <button class="pill-btn active" data-mode="youtube">▶ YouTube Live</button>
+          <button class="pill-btn" data-mode="ambientField">Wave Field</button>
+          <button class="pill-btn" data-mode="torus">Torus 3D</button>
+          <button class="pill-btn" data-mode="cymatics">Chladni Plate</button>
+          <button class="pill-btn" data-mode="oscilloscope">Oscilloscope</button>
+          <button class="pill-btn" data-mode="tunnel">Vortex</button>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <span class="control-label">Render Engine:</span>
+        <select class="custom-select" id="charsetSelect">
+          <option value="braille_bayer" selected>★ Ultra-HD Braille (8× Bayer Dither)</option>
+          <option value="braille_sharp">★ Ultra-HD Braille (8× Sharp Dots)</option>
+          <option value="standard">Standard ASCII ( .:-=+*#%@)</option>
+          <option value="blocks">Block Shades ( ░▒▓█)</option>
+          <option value="binary">Cyber Binary ( 01)</option>
+          <option value="dots">Minimal Dots ( ·:;*oO8@)</option>
+        </select>
+      </div>
+
+      <div class="control-group">
+        <span class="control-label">Color Mode:</span>
+        <select class="custom-select" id="colorModeSelect">
+          <option value="truecolor" selected>★ True Color (Accurate RGB)</option>
+          <option value="vibrant">Vibrant / Saturated</option>
+          <option value="neon">Cyber Neon (Cyan/Magenta)</option>
+          <option value="matrix">Matrix Green</option>
+          <option value="amber">Amber CRT</option>
+          <option value="monochrome">Pure Black & White</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Fine Tuning Sliders & 3D Depth Controls -->
+    <div class="panel-row" style="justify-content: space-between;">
+      <div class="control-group">
+        <span class="control-label">3D Depth:</span>
+        <div class="slider-wrap">
+          <input type="range" id="holoDepthSlider" min="10" max="250" step="5" value="80">
+        </div>
+      </div>
+
+      <div class="control-group">
+        <span class="control-label">Dither Contrast:</span>
+        <div class="slider-wrap">
+          <input type="range" id="ditherSlider" min="0.3" max="2.0" step="0.1" value="1.0">
+        </div>
+      </div>
+
+      <div class="control-group">
+        <span class="control-label">Saturation:</span>
+        <div class="slider-wrap">
+          <input type="range" id="saturationSlider" min="0.5" max="2.5" step="0.1" value="1.35">
+        </div>
+      </div>
+
+      <div class="control-group">
+        <span class="control-label">Audio Gain:</span>
+        <div class="slider-wrap">
+          <input type="range" id="sensitivitySlider" min="1.0" max="8.0" step="0.2" value="4.0">
+        </div>
+      </div>
+
+      <div class="control-group">
+        <button class="pill-btn" id="btnReset3DCam" style="background: rgba(176,38,255,0.2); border: 1px solid var(--accent-purple); color: #df8fff;">
+          Reset 3D Cam
+        </button>
+      </div>
+
+      <div class="control-group">
+        <span class="control-label">Bass Chroma:</span>
+        <input type="checkbox" id="chromaToggle" checked style="cursor: pointer; accent-color: var(--accent);">
+      </div>
+
+      <div class="control-group">
+        <span class="control-label">Scanlines:</span>
+        <input type="checkbox" id="scanlineToggle" checked style="cursor: pointer; accent-color: var(--accent);">
+      </div>
+    </div>
+  </div>
+
+  <button class="toggle-panel-btn" id="togglePanelBtn">HIDE CONTROLS [H]</button>
+
+  <!-- Initial Audio Permission Modal -->
+  <div class="modal-backdrop" id="startModal">
+    <div class="modal-card">
+      <div class="modal-title">3D Hologram & Ultra-HD ASCII</div>
+      <div class="modal-desc">
+        Real-time **3D Hologram Depth Field** with mouse orbit and tilt, **Ultra-HD Braille 8× dithering**, and **True-Color RGB sampling** synchronized to music beats.
+        <br><br>
+        Stream YouTube in volumetric 3D or explore acoustic wave fields!
+      </div>
+      <div class="modal-options">
+        <button class="modal-btn" id="modalCaptureYTBtn">
+          ▶ CAPTURE YOUTUBE (3D HOLOGRAM + 8× BRAILLE)
+        </button>
+        <button class="modal-btn secondary" id="modalMicBtn">
+          ACTIVATE ROOM MIC ONLY
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- JavaScript Ultra-HD Braille & 3D Hologram Engine Core -->
+  <script>
+    (function () {
+      'use strict';
+
+      // --- CONFIG & STATE ---
+      const state = {
+        mode: 'youtube', // 'youtube', 'ambientField', 'torus', 'cymatics', 'oscilloscope', 'tunnel'
+        charset: 'braille_bayer', // 'braille_bayer', 'braille_sharp', 'standard', 'blocks', 'binary', 'dots'
+        colorMode: 'truecolor', // 'truecolor', 'vibrant', 'neon', 'matrix', 'amber', 'monochrome'
+        // 3D Hologram Depth Field Camera & Physics
+        hologram3D: true, // 3D Hologram enabled by default!
+        holoDepth: 80,
+        camYaw: -0.18,   // Horizontal orbit angle
+        camPitch: 0.22,  // Vertical tilt angle
+        camDist: 520,    // Camera zoom distance
+        isDraggingCam: false,
+        lastMouseX: 0,
+        lastMouseY: 0,
+        // Dithering & Color settings
+        ditherContrast: 1.0,
+        saturation: 1.35,
+        brightness: 1.15,
+        sensitivity: 4.0,
+        noiseFloor: 0.04,
+        fontSize: 10,
+        scanlines: true,
+        chromaSplit: true,
+        isListening: false,
+        isCapturingYT: false,
+        time: 0,
+        ambientLevel: 0,
+        smoothedLevel: 0,
+        bass: 0,
+        mid: 0,
+        treble: 0,
+        waveformRMS: 0,
+        beatPulse: 0
+      };
+
+      const CHARSETS = {
+        standard: ' .:-=+*#%@',
+        blocks: ' ░▒▓█',
+        binary: ' 01',
+        dots: ' ·:;*oO8@'
+      };
+
+      // Unicode Braille 2x4 dot matrix bitmasks
+      const BRAILLE_MAP = [
+        [0x01, 0x08],
+        [0x02, 0x10],
+        [0x04, 0x20],
+        [0x40, 0x80]
+      ];
+
+      // Standard Bayer 4x4 matrix for halftone dithering
+      const BAYER_4X4 = [
+        [ 0.0 / 16,  8.0 / 16,  2.0 / 16, 10.0 / 16],
+        [12.0 / 16,  4.0 / 16, 14.0 / 16,  6.0 / 16],
+        [ 3.0 / 16, 11.0 / 16,  1.0 / 16,  9.0 / 16],
+        [15.0 / 16,  7.0 / 16, 13.0 / 16,  5.0 / 16]
+      ];
+
+      // --- DOM REFERENCES ---
+      const canvasContainer = document.getElementById('canvas-container');
+      const canvas = document.getElementById('asciiCanvas');
+      const ctx = canvas.getContext('2d', { alpha: false });
+      const toast = document.getElementById('toast');
+      const audioStatusDot = document.getElementById('audioStatusDot');
+      const ambientLevelMeter = document.getElementById('ambientLevelMeter');
+      const bassMeter = document.getElementById('bassMeter');
+      const trebMeter = document.getElementById('trebMeter');
+      const fpsCounter = document.getElementById('fpsCounter');
+      const micStatusText = document.getElementById('micStatusText');
+      const ytStatusText = document.getElementById('ytStatusText');
+      const btnToggleMic = document.getElementById('btnToggleMic');
+      const btnCaptureYT = document.getElementById('btnCaptureYT');
+      const btnToggleHolo = document.getElementById('btnToggleHolo');
+      const holoBtnText = document.getElementById('holoBtnText');
+      const holoBadge = document.getElementById('holoBadge');
+      const holoHint = document.getElementById('holoHint');
+      const startModal = document.getElementById('startModal');
+      const scanlineOverlay = document.getElementById('scanlineOverlay');
+      const controlPanel = document.getElementById('controlPanel');
+      const togglePanelBtn = document.getElementById('togglePanelBtn');
+      const ytVideo = document.getElementById('ytVideo');
+
+      // High-resolution offscreen canvas (2x width, 4x height of char grid)
+      const offCanvas = document.createElement('canvas');
+      const offCtx = offCanvas.getContext('2d', { willReadFrequently: true });
+
+      let charWidth = 6;
+      let charHeight = 12;
+      let cols = 120;
+      let rows = 60;
+      let subWidth = 240;
+      let subHeight = 240;
+
+      // --- WEB AUDIO API ---
+      let audioCtx = null;
+      let analyser = null;
+      let micStream = null;
+      let ytStream = null;
+      let sourceNode = null;
+      let ytAudioNode = null;
+      let freqData = null;
+      let timeData = null;
+
+      function showToast(msg) {
+        toast.textContent = msg;
+        toast.classList.add('show');
+        setTimeout(() => toast.classList.remove('show'), 2600);
+      }
+
+      function ensureAudioContext() {
+        if (!audioCtx) {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          audioCtx = new AudioContextClass();
+          analyser = audioCtx.createAnalyser();
+          analyser.fftSize = 512;
+          analyser.smoothingTimeConstant = 0.65;
+          freqData = new Uint8Array(analyser.frequencyBinCount);
+          timeData = new Uint8Array(analyser.fftSize);
+        }
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+      }
+
+      // --- 3D CAMERA ORBIT & INTERACTION ---
+      function updateHoloUI() {
+        if (state.hologram3D) {
+          btnToggleHolo.classList.add('holo-active');
+          holoBtnText.textContent = '3D HOLO [ON]';
+          holoBadge.style.display = 'inline-block';
+          holoHint.style.display = 'block';
+        } else {
+          btnToggleHolo.classList.remove('holo-active');
+          holoBtnText.textContent = '3D HOLOGRAM';
+          holoBadge.style.display = 'none';
+          holoHint.style.display = 'none';
+        }
+      }
+
+      function reset3DCamera() {
+        state.camYaw = -0.18;
+        state.camPitch = 0.22;
+        state.camDist = 520;
+        showToast('3D Camera Reset');
+      }
+
+      // Mouse Drag to Orbit 3D Camera
+      canvasContainer.addEventListener('mousedown', (e) => {
+        if (e.button === 0) {
+          state.isDraggingCam = true;
+          state.lastMouseX = e.clientX;
+          state.lastMouseY = e.clientY;
+          canvasContainer.classList.add('grabbing');
+        }
+      });
+
+      window.addEventListener('mousemove', (e) => {
+        if (!state.isDraggingCam) return;
+        const dx = e.clientX - state.lastMouseX;
+        const dy = e.clientY - state.lastMouseY;
+        state.lastMouseX = e.clientX;
+        state.lastMouseY = e.clientY;
+
+        // Orbit Yaw and Pitch
+        state.camYaw += dx * 0.006;
+        state.camPitch = Math.max(-1.4, Math.min(1.4, state.camPitch + dy * 0.006));
+      });
+
+      window.addEventListener('mouseup', () => {
+        if (state.isDraggingCam) {
+          state.isDraggingCam = false;
+          canvasContainer.classList.remove('grabbing');
+        }
+      });
+
+      // Mouse Wheel to Zoom in/out in 3D
+      canvasContainer.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        state.camDist = Math.max(180, Math.min(1200, state.camDist + e.deltaY * 0.5));
+      }, { passive: false });
+
+      // Touch orbit support for trackpads/touch devices
+      let touchStartX = 0, touchStartY = 0;
+      canvasContainer.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 1) {
+          touchStartX = e.touches[0].clientX;
+          touchStartY = e.touches[0].clientY;
+        }
+      }, { passive: true });
+
+      canvasContainer.addEventListener('touchmove', (e) => {
+        if (e.touches.length === 1) {
+          const dx = e.touches[0].clientX - touchStartX;
+          const dy = e.touches[0].clientY - touchStartY;
+          touchStartX = e.touches[0].clientX;
+          touchStartY = e.touches[0].clientY;
+          state.camYaw += dx * 0.007;
+          state.camPitch = Math.max(-1.4, Math.min(1.4, state.camPitch + dy * 0.007));
+        }
+      }, { passive: true });
+
+      // --- CAPTURE YOUTUBE TAB ---
+      async function captureYouTubeTab() {
+        ensureAudioContext();
+        if (startModal) startModal.classList.add('hidden');
+        try {
+          try {
+            ytStream = await navigator.mediaDevices.getDisplayMedia({
+              video: {
+                displaySurface: 'browser'
+              },
+              audio: true
+            });
+          } catch (surfaceErr) {
+            console.warn('getDisplayMedia with displaySurface constraint failed, falling back to standard constraints:', surfaceErr);
+            ytStream = await navigator.mediaDevices.getDisplayMedia({
+              video: true,
+              audio: true
+            });
+          }
+
+          ytVideo.srcObject = ytStream;
+          await ytVideo.play();
+
+          const audioTracks = ytStream.getAudioTracks();
+          if (audioTracks && audioTracks.length > 0) {
+            if (ytAudioNode) ytAudioNode.disconnect();
+            ytAudioNode = audioCtx.createMediaStreamSource(ytStream);
+            ytAudioNode.connect(analyser);
+            state.isListening = true;
+            showToast('▶ YouTube Tab active with 3D Hologram & Music Sync!');
+          } else {
+            if (!state.isListening) {
+              activateMicrophone(true);
+            }
+            showToast('▶ YouTube Video connected! (Using mic for music sync)');
+          }
+
+          state.isCapturingYT = true;
+          state.mode = 'youtube';
+
+          document.querySelectorAll('#sketchModePills .pill-btn').forEach(b => b.classList.remove('active'));
+          const ytPill = document.querySelector('[data-mode="youtube"]');
+          if (ytPill) ytPill.classList.add('active');
+
+          btnCaptureYT.classList.add('yt-active');
+          ytStatusText.textContent = '■ STOP YOUTUBE';
+          audioStatusDot.classList.add('active');
+
+          const videoTrack = ytStream.getVideoTracks()[0];
+          if (videoTrack) {
+            videoTrack.onended = () => {
+              stopYouTubeCapture();
+            };
+          }
+        } catch (err) {
+          console.warn('YouTube capture error:', err);
+          showToast('YouTube capture cancelled or dismissed');
+        }
+      }
+
+      function stopYouTubeCapture() {
+        if (ytStream) {
+          ytStream.getTracks().forEach(t => t.stop());
+          ytStream = null;
+        }
+        ytVideo.srcObject = null;
+        state.isCapturingYT = false;
+        btnCaptureYT.classList.remove('yt-active');
+        ytStatusText.textContent = '▶ CAPTURE YOUTUBE';
+        showToast('YouTube capture stopped');
+
+        if (state.mode === 'youtube') {
+          state.mode = 'ambientField';
+          document.querySelectorAll('#sketchModePills .pill-btn').forEach(b => b.classList.remove('active'));
+          const wavePill = document.querySelector('[data-mode="ambientField"]');
+          if (wavePill) wavePill.classList.add('active');
+        }
+      }
+
+      async function activateMicrophone(silent = false) {
+        try {
+          ensureAudioContext();
+
+          micStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: false,
+              noiseSuppression: false,
+              autoGainControl: true
+            },
+            video: false
+          });
+
+          if (sourceNode) sourceNode.disconnect();
+          sourceNode = audioCtx.createMediaStreamSource(micStream);
+          sourceNode.connect(analyser);
+
+          state.isListening = true;
+          audioStatusDot.classList.add('active');
+          btnToggleMic.classList.add('active');
+          micStatusText.textContent = 'MIC LISTENING';
+          startModal.classList.add('hidden');
+          if (!silent) showToast('Microphone active for music sync');
+        } catch (err) {
+          console.warn('Microphone activation failed:', err);
+          if (!silent) showToast('Mic access denied');
+          startModal.classList.add('hidden');
+        }
+      }
+
+      function stopMicrophone() {
+        if (micStream) {
+          micStream.getTracks().forEach(t => t.stop());
+          micStream = null;
+        }
+        state.isListening = false;
+        audioStatusDot.classList.remove('active');
+        btnToggleMic.classList.remove('active');
+        micStatusText.textContent = 'ENABLE MIC';
+        showToast('Microphone disabled');
+      }
+
+      function resize() {
+        const dpr = window.devicePixelRatio || 1;
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+
+        canvas.width = width * dpr;
+        canvas.height = height * dpr;
+        canvas.style.width = width + 'px';
+        canvas.style.height = height + 'px';
+
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.scale(dpr, dpr);
+
+        ctx.font = `${state.fontSize}px 'JetBrains Mono', 'Fira Code', 'Courier New', Courier, monospace`;
+        ctx.textBaseline = 'top';
+
+        const metrics = ctx.measureText('M');
+        charWidth = metrics.width || (state.fontSize * 0.6);
+        charHeight = state.fontSize * 1.18;
+
+        cols = Math.floor(width / charWidth);
+        rows = Math.floor(height / charHeight);
+
+        subWidth = cols * 2;
+        subHeight = rows * 4;
+        offCanvas.width = subWidth;
+        offCanvas.height = subHeight;
+      }
+
+      window.addEventListener('resize', resize);
+
+      // --- AUDIO PROCESSING & BEAT TRANSIENTS ---
+      function processAudioSync() {
+        if (!analyser || !state.isListening) {
+          state.ambientLevel = 0;
+          state.smoothedLevel = 0;
+          state.bass = 0;
+          state.mid = 0;
+          state.treble = 0;
+          state.waveformRMS = 0;
+          state.beatPulse *= 0.85;
+          ambientLevelMeter.style.width = '0%';
+          bassMeter.style.width = '0%';
+          trebMeter.style.width = '0%';
+          return;
+        }
+
+        analyser.getByteFrequencyData(freqData);
+        analyser.getByteTimeDomainData(timeData);
+
+        const binCount = analyser.frequencyBinCount;
+        let sum = 0;
+        let bassSum = 0, bassCount = 0;
+        let midSum = 0, midCount = 0;
+        let trebSum = 0, trebCount = 0;
+
+        const bassEnd = Math.floor(binCount * 0.15);
+        const midEnd = Math.floor(binCount * 0.55);
+
+        for (let i = 0; i < binCount; i++) {
+          const val = freqData[i] / 255.0;
+          sum += val;
+          if (i < bassEnd) {
+            bassSum += val;
+            bassCount++;
+          } else if (i < midEnd) {
+            midSum += val;
+            midCount++;
+          } else {
+            trebSum += val;
+            trebCount++;
+          }
+        }
+
+        const avg = sum / binCount;
+        const b = bassCount ? (bassSum / bassCount) : 0;
+        const m = midCount ? (midSum / midCount) : 0;
+        const t = trebCount ? (trebSum / trebCount) : 0;
+
+        const rawLevel = Math.max(0, avg - state.noiseFloor) * state.sensitivity;
+        const rawBass = Math.max(0, b - state.noiseFloor) * state.sensitivity;
+        const rawMid = Math.max(0, m - state.noiseFloor) * state.sensitivity;
+        const rawTreb = Math.max(0, t - state.noiseFloor) * state.sensitivity;
+
+        state.ambientLevel = Math.min(1.0, rawLevel);
+        const prevBass = state.bass;
+        state.bass += (Math.min(1.0, rawBass) - state.bass) * 0.4;
+        state.mid += (Math.min(1.0, rawMid) - state.mid) * 0.3;
+        state.treble += (Math.min(1.0, rawTreb) - state.treble) * 0.25;
+
+        // Bass transient detection
+        if (state.bass > 0.45 && (state.bass - prevBass) > 0.12) {
+          state.beatPulse = 1.0;
+        } else {
+          state.beatPulse *= 0.88;
+        }
+
+        let squareSum = 0;
+        for (let i = 0; i < timeData.length; i++) {
+          const norm = (timeData[i] - 128) / 128;
+          squareSum += norm * norm;
+        }
+        state.waveformRMS = Math.sqrt(squareSum / timeData.length) * state.sensitivity;
+
+        state.smoothedLevel += (state.ambientLevel - state.smoothedLevel) * 0.25;
+
+        ambientLevelMeter.style.width = Math.min(100, state.smoothedLevel * 100) + '%';
+        bassMeter.style.width = Math.min(100, state.bass * 100) + '%';
+        trebMeter.style.width = Math.min(100, state.treble * 100) + '%';
+      }
+
+      function getStandardChar(val) {
+        const charset = CHARSETS[state.charset] || CHARSETS.standard;
+        const clamped = Math.max(0, Math.min(0.999, val));
+        const idx = Math.floor(clamped * charset.length);
+        return charset[idx];
+      }
+
+      function getPixelColor(r, g, b, lum, x, y) {
+        const mode = state.colorMode;
+
+        if (mode === 'monochrome') {
+          const v = Math.min(255, Math.floor(lum * 255 * state.brightness));
+          return `rgb(${v}, ${v}, ${v})`;
+        }
+
+        if (mode === 'matrix') {
+          if (lum > 0.9) return '#ffffff';
+          const gCol = Math.min(255, Math.floor(lum * 255 * state.brightness));
+          return `rgb(0, ${gCol}, ${Math.floor(lum * 40)})`;
+        }
+
+        if (mode === 'amber') {
+          const rCol = Math.min(255, Math.floor(lum * 255 * state.brightness));
+          const gCol = Math.min(255, Math.floor(lum * 170 * state.brightness));
+          return `rgb(${rCol}, ${gCol}, 0)`;
+        }
+
+        if (mode === 'neon') {
+          const hue = (180 + lum * 140 + Math.sin(state.time + y * 0.05) * 40) % 360;
+          return `hsl(${hue}, 100%, ${Math.min(95, lum * 80 * state.brightness)}%)`;
+        }
+
+        // True Color & Vibrant Modes
+        const sat = mode === 'vibrant' ? (state.saturation * 1.45) : state.saturation;
+        const bright = state.brightness * (1.0 + (state.beatPulse * 0.12));
+
+        const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+        let adjR = (gray + (r - gray) * sat) * bright;
+        let adjG = (gray + (g - gray) * sat) * bright;
+        let adjB = (gray + (b - gray) * sat) * bright;
+
+        if (state.bass > 0.4) {
+          adjR += state.bass * 14;
+        }
+
+        const finalR = Math.min(255, Math.max(0, Math.round(adjR)));
+        const finalG = Math.min(255, Math.max(0, Math.round(adjG)));
+        const finalB = Math.min(255, Math.max(0, Math.round(adjB)));
+
+        return `rgb(${finalR}, ${finalG}, ${finalB})`;
+      }
+
+      // --- ULTRA-HD BRAILLE RENDERER CORE ---
+      function renderYouTubeLive(grid) {
+        if (!state.isCapturingYT || ytVideo.readyState < 2) {
+          const msg1 = "▶ CAPTURE YOUTUBE (3D HOLOGRAM + 8× BRAILLE)";
+          const msg2 = "Click 'CAPTURE YOUTUBE' in header to select YouTube tab";
+          const msg3 = "Make sure 'Share tab audio' is enabled for music sync";
+          const startY = Math.floor(rows / 2) - 2;
+
+          const renderCenteredText = (text, lineY, color = '#00f3ff') => {
+            const startX = Math.floor((cols - text.length) / 2);
+            for (let i = 0; i < text.length; i++) {
+              if (startX + i >= 0 && startX + i < cols && lineY >= 0 && lineY < rows) {
+                const idx = (startX + i) + lineY * cols;
+                grid.chars[idx] = text[i];
+                grid.colors[idx] = color;
+                grid.depths[idx] = 0;
+              }
+            }
+          };
+
+          renderCenteredText(msg1, startY, '#00f3ff');
+          renderCenteredText(msg2, startY + 2, '#ffffff');
+          renderCenteredText(msg3, startY + 3, '#8c96a5');
+
+          for (let x = 4; x < cols - 4; x++) {
+            grid.chars[x + 2 * cols] = '⣿';
+            grid.colors[x + 2 * cols] = 'rgba(0, 243, 255, 0.4)';
+            grid.chars[x + (rows - 3) * cols] = '⣿';
+            grid.colors[x + (rows - 3) * cols] = 'rgba(255, 0, 85, 0.4)';
+          }
+          return;
+        }
+
+        offCtx.drawImage(ytVideo, 0, 0, subWidth, subHeight);
+        const imgData = offCtx.getImageData(0, 0, subWidth, subHeight).data;
+
+        const isBraille = state.charset.startsWith('braille');
+        const useBayer = state.charset === 'braille_bayer';
+        const ditherStrength = state.ditherContrast;
+        const chromaShift = (state.chromaSplit && state.beatPulse > 0.4) ? Math.floor(state.beatPulse * 4) : 0;
+
+        if (isBraille) {
+          for (let cy = 0; cy < rows; cy++) {
+            for (let cx = 0; cx < cols; cx++) {
+              let brailleBits = 0;
+              let rTotal = 0, gTotal = 0, bTotal = 0, dotCount = 0;
+              let totalLum = 0;
+
+              for (let dy = 0; dy < 4; dy++) {
+                const py = cy * 4 + dy;
+                for (let dx = 0; dx < 2; dx++) {
+                  const px = cx * 2 + dx;
+
+                  const baseIdx = (py * subWidth + px) * 4;
+                  let r = imgData[baseIdx];
+                  let g = imgData[baseIdx + 1];
+                  let b = imgData[baseIdx + 2];
+
+                  if (chromaShift > 0) {
+                    const rPx = Math.min(subWidth - 1, px + chromaShift);
+                    const bPx = Math.max(0, px - chromaShift);
+                    r = imgData[(py * subWidth + rPx) * 4];
+                    b = imgData[(py * subWidth + bPx) * 4 + 2];
+                  }
+
+                  let lum = (r * 0.299 + g * 0.587 + b * 0.114) / 255.0;
+
+                  if (state.bass > 0.2) {
+                    lum = Math.pow(lum, 1.0 - state.bass * 0.35);
+                  }
+
+                  totalLum += lum;
+
+                  let threshold = 0.5;
+                  if (useBayer) {
+                    const bayerVal = BAYER_4X4[px % 4][py % 4];
+                    threshold = 0.5 + (bayerVal - 0.5) * ditherStrength;
+                  }
+
+                  if (lum >= threshold) {
+                    brailleBits |= BRAILLE_MAP[dy][dx];
+                    rTotal += r;
+                    gTotal += g;
+                    bTotal += b;
+                    dotCount++;
+                  }
+                }
+              }
+
+              const idx = cx + cy * cols;
+              const avgLum = totalLum / 8.0;
+              grid.depths[idx] = avgLum;
+
+              if (brailleBits === 0) {
+                grid.chars[idx] = ' ';
+                grid.colors[idx] = '#000000';
+              } else {
+                grid.chars[idx] = String.fromCharCode(0x2800 + brailleBits);
+                const avgR = dotCount ? (rTotal / dotCount) : 0;
+                const avgG = dotCount ? (gTotal / dotCount) : 0;
+                const avgB = dotCount ? (bTotal / dotCount) : 0;
+                grid.colors[idx] = getPixelColor(avgR, avgG, avgB, avgLum, cx, cy);
+              }
+            }
+          }
+        } else {
+          for (let cy = 0; cy < rows; cy++) {
+            for (let cx = 0; cx < cols; cx++) {
+              const px = cx * 2;
+              const py = cy * 4;
+              const pxIdx = (py * subWidth + px) * 4;
+
+              const r = imgData[pxIdx];
+              const g = imgData[pxIdx + 1];
+              const b = imgData[pxIdx + 2];
+              let lum = (r * 0.299 + g * 0.587 + b * 0.114) / 255.0;
+
+              if (state.bass > 0.2) {
+                lum = Math.pow(lum, 1.0 - state.bass * 0.4);
+              }
+
+              const idx = cx + cy * cols;
+              grid.depths[idx] = lum;
+              grid.chars[idx] = getStandardChar(lum);
+              grid.colors[idx] = getPixelColor(r, g, b, lum, cx, cy);
+            }
+          }
+        }
+      }
+
+      function renderAmbientField(grid) {
+        const soundEnergy = state.smoothedLevel;
+        const timeScale = 0.5 + soundEnergy * 2.0;
+        const isBraille = state.charset.startsWith('braille');
+
+        if (isBraille) {
+          for (let cy = 0; cy < rows; cy++) {
+            for (let cx = 0; cx < cols; cx++) {
+              let brailleBits = 0;
+              let totalVal = 0, dotCount = 0;
+
+              for (let dy = 0; dy < 4; dy++) {
+                const py = cy * 4 + dy;
+                const ny = (py / subHeight) * 4.0;
+                for (let dx = 0; dx < 2; dx++) {
+                  const px = cx * 2 + dx;
+                  const nx = (px / subWidth) * 6.0;
+
+                  const w1 = Math.sin(nx * 1.5 + state.time * timeScale);
+                  const w2 = Math.cos(ny * 2.0 - state.time * timeScale * 0.7);
+                  const ripple = Math.sin(Math.sqrt((px - subWidth / 2) ** 2 + (py - subHeight / 2) ** 2) * 0.1 - state.time * 4) * soundEnergy;
+
+                  const fieldVal = (w1 + w2) * 0.25 + 0.5 + ripple * 0.8;
+                  const finalVal = fieldVal * (0.2 + soundEnergy * 0.8);
+                  totalVal += finalVal;
+
+                  const bayerVal = BAYER_4X4[px % 4][py % 4];
+                  const threshold = 0.5 + (bayerVal - 0.5) * state.ditherContrast;
+
+                  if (finalVal >= threshold) {
+                    brailleBits |= BRAILLE_MAP[dy][dx];
+                    dotCount++;
+                  }
+                }
+              }
+
+              const idx = cx + cy * cols;
+              const avgVal = totalVal / 8;
+              grid.depths[idx] = avgVal;
+
+              if (brailleBits === 0) {
+                grid.chars[idx] = ' ';
+              } else {
+                grid.chars[idx] = String.fromCharCode(0x2800 + brailleBits);
+                const r = Math.floor(Math.sin((cx / cols) * 6 + state.time) * 127 + 128);
+                const g = Math.floor(Math.cos((cy / rows) * 4 + state.time * 0.8) * 127 + 128);
+                const b = Math.floor(avgVal * 255);
+                grid.colors[idx] = getPixelColor(r, g, b, avgVal, cx, cy);
+              }
+            }
+          }
+        } else {
+          for (let y = 0; y < rows; y++) {
+            const ny = (y / rows) * 4.0;
+            for (let x = 0; x < cols; x++) {
+              const nx = (x / cols) * 6.0;
+              const w1 = Math.sin(nx * 1.5 + state.time * timeScale);
+              const w2 = Math.cos(ny * 2.0 - state.time * timeScale * 0.7);
+              const ripple = Math.sin(Math.sqrt((x - cols / 2) ** 2 + (y - rows / 2) ** 2) * 0.2 - state.time * 4) * soundEnergy;
+
+              const fieldVal = (w1 + w2) * 0.25 + 0.5 + ripple * 0.8;
+              const finalVal = fieldVal * (0.2 + soundEnergy * 0.8);
+
+              const idx = x + y * cols;
+              grid.depths[idx] = finalVal;
+
+              if (finalVal > 0.12) {
+                grid.chars[idx] = getStandardChar(finalVal);
+                const r = Math.floor(Math.sin(nx + state.time) * 127 + 128);
+                const g = Math.floor(Math.cos(ny + state.time * 0.8) * 127 + 128);
+                const b = Math.floor(finalVal * 255);
+                grid.colors[idx] = getPixelColor(r, g, b, finalVal, x, y);
+              }
+            }
+          }
+        }
+      }
+
+      function renderTorus(grid) {
+        const soundEnergy = state.smoothedLevel;
+        const A = state.time * (0.4 + soundEnergy * 0.8);
+        const B = state.time * (0.3 + state.bass * 0.7);
+
+        const cosA = Math.cos(A), sinA = Math.sin(A);
+        const cosB = Math.cos(B), sinB = Math.sin(B);
+
+        const R1 = 0.9 + soundEnergy * 0.6;
+        const R2 = 2.2 + state.bass * 0.8;
+        const K2 = 5.0;
+        const K1 = cols * K2 * 3 / (8 * (R1 + R2));
+
+        const zBuffer = new Float32Array(cols * rows);
+        const thetaStep = 0.09;
+        const phiStep = 0.04;
+
+        for (let theta = 0; theta < Math.PI * 2; theta += thetaStep) {
+          const costheta = Math.cos(theta), sintheta = Math.sin(theta);
+          const audioDeform = Math.sin(theta * 7 + state.time * 4) * state.treble * 0.35;
+          const currR1 = R1 + audioDeform;
+
+          for (let phi = 0; phi < Math.PI * 2; phi += phiStep) {
+            const cosphi = Math.cos(phi), sinphi = Math.sin(phi);
+
+            const circlex = R2 + currR1 * costheta;
+            const circley = currR1 * sintheta;
+
+            const x = circlex * (cosB * cosphi + sinA * sinB * sinphi) - circley * cosA * sinB;
+            const y = circlex * (sinB * cosphi - sinA * cosB * sinphi) + circley * cosA * cosB;
+            const z = K2 + cosA * circlex * sinphi + circley * sinA;
+            const ooz = 1 / z;
+
+            const xp = Math.floor(cols / 2 + K1 * ooz * x * 1.5);
+            const yp = Math.floor(rows / 2 - K1 * ooz * y);
+
+            const L = cosphi * costheta * sinB - cosA * costheta * sinphi -
+                      sinA * sintheta + cosB * (cosA * sintheta - costheta * sinA * sinphi);
+
+            if (xp >= 0 && xp < cols && yp >= 0 && yp < rows) {
+              const idx = xp + yp * cols;
+              if (ooz > zBuffer[idx]) {
+                zBuffer[idx] = ooz;
+                const normL = Math.max(0, (L + 1.2) / 2.4);
+                const brightness = normL * (0.35 + soundEnergy * 0.7);
+                grid.depths[idx] = normL;
+
+                const isBraille = state.charset.startsWith('braille');
+                grid.chars[idx] = isBraille ? (normL > 0.7 ? '⣿' : (normL > 0.4 ? '⣷' : '⠇')) : getStandardChar(brightness);
+
+                const r = Math.floor((costheta * 0.5 + 0.5) * 255);
+                const g = Math.floor((sinphi * 0.5 + 0.5) * 255);
+                const b = Math.floor(normL * 255);
+                grid.colors[idx] = getPixelColor(r, g, b, brightness, xp, yp);
+              }
+            }
+          }
+        }
+      }
+
+      function renderCymatics(grid) {
+        const soundEnergy = state.smoothedLevel;
+        const centerX = cols / 2;
+        const centerY = rows / 2;
+        const L = Math.min(cols, rows * 2) * 0.45;
+
+        const n = 3 + Math.floor(state.mid * 5);
+        const m = 2 + Math.floor(state.bass * 5);
+
+        for (let y = 0; y < rows; y++) {
+          for (let x = 0; x < cols; x++) {
+            const px = ((x - centerX) * 1.8) / L;
+            const py = (y - centerY) / (L / 2);
+
+            if (Math.abs(px) > 1.2 || Math.abs(py) > 1.2) continue;
+
+            const w1 = Math.sin(n * Math.PI * px) * Math.sin(m * Math.PI * py);
+            const w2 = Math.sin(m * Math.PI * px) * Math.sin(n * Math.PI * py);
+            const chladni = Math.abs(w1 - w2);
+
+            const sandDensity = Math.exp(-chladni * (14.0 - soundEnergy * 8.0)) * (0.2 + soundEnergy * 0.85);
+            const idx = x + y * cols;
+            grid.depths[idx] = sandDensity;
+
+            if (sandDensity > 0.1) {
+              const isBraille = state.charset.startsWith('braille');
+              grid.chars[idx] = isBraille ? (sandDensity > 0.6 ? '⣿' : (sandDensity > 0.3 ? '⣶' : '⠶')) : getStandardChar(sandDensity);
+
+              const r = Math.floor(Math.min(255, sandDensity * 320));
+              const g = Math.floor(Math.min(255, (1 - chladni) * 220));
+              const b = Math.floor(Math.max(50, (1 - sandDensity) * 255));
+              grid.colors[idx] = getPixelColor(r, g, b, sandDensity, x, y);
+            }
+          }
+        }
+      }
+
+      function renderOscilloscope(grid) {
+        const centerY = Math.floor(rows / 2);
+        const halfHeight = Math.floor(rows * 0.4);
+
+        if (!timeData) return;
+        const step = timeData.length / cols;
+
+        for (let x = 0; x < cols; x++) {
+          const sampleIdx = Math.floor(x * step);
+          const rawVal = (timeData[sampleIdx] - 128) / 128;
+          const offset = Math.floor(rawVal * halfHeight * state.sensitivity);
+          const y = Math.max(0, Math.min(rows - 1, centerY + offset));
+
+          const hue = (x / cols) * 280;
+          const laserColor = `hsl(${hue}, 100%, 65%)`;
+
+          const idx = x + y * cols;
+          grid.depths[idx] = 0.9;
+          grid.chars[idx] = state.charset.startsWith('braille') ? '⣿' : getStandardChar(0.95);
+          grid.colors[idx] = laserColor;
+
+          if (Math.abs(offset) > 1) {
+            const start = Math.min(centerY, y);
+            const end = Math.max(centerY, y);
+            for (let ty = start; ty <= end; ty++) {
+              const trailIdx = x + ty * cols;
+              if (grid.chars[trailIdx] === ' ') {
+                const dist = 1 - Math.abs(ty - centerY) / Math.max(1, Math.abs(offset));
+                grid.depths[trailIdx] = dist * 0.6;
+                grid.chars[trailIdx] = state.charset.startsWith('braille') ? '⠶' : getStandardChar(dist * 0.6);
+                grid.colors[trailIdx] = `hsl(${hue}, 100%, ${Math.floor(dist * 45)}%)`;
+              }
+            }
+          }
+        }
+      }
+
+      function renderTunnel(grid) {
+        const soundEnergy = state.smoothedLevel;
+        const centerX = cols / 2;
+        const centerY = rows / 2;
+        const warpSpeed = state.time * (1.5 + soundEnergy * 4.0);
+
+        for (let y = 0; y < rows; y++) {
+          for (let x = 0; x < cols; x++) {
+            const dx = (x - centerX) * 1.8;
+            const dy = (y - centerY);
+            const r = Math.sqrt(dx * dx + dy * dy);
+
+            if (r < 0.6) continue;
+
+            const theta = Math.atan2(dy, dx) + state.time * 0.3;
+            const u = (theta / Math.PI) * 4;
+            const v = (36.0 / r) + warpSpeed;
+
+            const pattern = Math.sin(v) + Math.cos(u * 3);
+            const intensity = Math.max(0, (pattern * 0.5 + 0.5) * (0.2 + soundEnergy * 0.9));
+            const idx = x + y * cols;
+            grid.depths[idx] = intensity;
+
+            if (intensity > 0.18) {
+              grid.chars[idx] = state.charset.startsWith('braille') ? (intensity > 0.6 ? '⣿' : (intensity > 0.35 ? '⣶' : '⠶')) : getStandardChar(intensity);
+              const hue = (v * 25 + state.time * 40) % 360;
+              grid.colors[idx] = `hsl(${hue}, 95%, ${Math.min(90, intensity * 75)}%)`;
+            }
+          }
+        }
+      }
+
+      // --- MAIN ANIMATION & CANVAS RENDER LOOP ---
+      let lastTime = performance.now();
+      let frameCount = 0;
+      let lastFpsUpdate = performance.now();
+
+      function loop(currentTime) {
+        requestAnimationFrame(loop);
+
+        const delta = (currentTime - lastTime) / 1000;
+        lastTime = currentTime;
+        state.time += delta;
+
+        frameCount++;
+        if (currentTime - lastFpsUpdate > 500) {
+          const fps = Math.round((frameCount * 1000) / (currentTime - lastFpsUpdate));
+          fpsCounter.textContent = `${fps} FPS`;
+          frameCount = 0;
+          lastFpsUpdate = currentTime;
+        }
+
+        processAudioSync();
+
+        const total = cols * rows;
+        const grid = {
+          chars: new Array(total).fill(' '),
+          colors: new Array(total).fill('#ffffff'),
+          depths: new Float32Array(total) // For 3D Hologram Z-Elevation
+        };
+
+        // Render chosen sketch mode
+        switch (state.mode) {
+          case 'youtube':
+            renderYouTubeLive(grid);
+            break;
+          case 'ambientField':
+            renderAmbientField(grid);
+            break;
+          case 'torus':
+            renderTorus(grid);
+            break;
+          case 'cymatics':
+            renderCymatics(grid);
+            break;
+          case 'oscilloscope':
+            renderOscilloscope(grid);
+            break;
+          case 'tunnel':
+            renderTunnel(grid);
+            break;
+        }
+
+        // Canvas Background Clear
+        ctx.fillStyle = '#040508';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // --- RENDER PASS: 3D HOLOGRAM DEPTH FIELD vs 2D FLAT ---
+        if (state.hologram3D) {
+          // Idle floating gentle sway if user is not actively dragging
+          let effectiveYaw = state.camYaw;
+          let effectivePitch = state.camPitch;
+
+          if (!state.isDraggingCam) {
+            effectiveYaw += Math.sin(state.time * 0.4) * 0.05;
+            effectivePitch += Math.cos(state.time * 0.3) * 0.03;
+          }
+
+          const cosY = Math.cos(effectiveYaw), sinY = Math.sin(effectiveYaw);
+          const cosX = Math.cos(effectivePitch), sinX = Math.sin(effectivePitch);
+
+          const centerX = canvas.width / (2 * (window.devicePixelRatio || 1));
+          const centerY = canvas.height / (2 * (window.devicePixelRatio || 1));
+          const fov = 460;
+          const camZ = state.camDist;
+
+          // Collect non-empty 3D points
+          const renderList = [];
+          const gridHalfW = (cols * charWidth) / 2;
+          const gridHalfH = (rows * charHeight) / 2;
+
+          for (let y = 0; y < rows; y++) {
+            const origY = y * charHeight - gridHalfH;
+            for (let x = 0; x < cols; x++) {
+              const idx = x + y * cols;
+              const ch = grid.chars[idx];
+              if (ch !== ' ') {
+                const origX = x * charWidth - gridHalfW;
+                const lum = grid.depths[idx];
+
+                // 3D Z-Depth extrusion driven by pixel brightness & sub-bass kicks
+                const audioRipple = Math.sin(Math.sqrt(origX * origX + origY * origY) * 0.03 - state.time * 4) * state.beatPulse * 20;
+                const zElevation = lum * state.holoDepth * (1.0 + state.bass * 0.7) + audioRipple;
+
+                // Rotate around Y axis (Yaw)
+                const x1 = origX * cosY + zElevation * sinY;
+                const z1 = -origX * sinY + zElevation * cosY;
+
+                // Rotate around X axis (Pitch)
+                const y1 = origY * cosX - z1 * sinX;
+                const z2 = origY * sinX + z1 * cosX + camZ;
+
+                if (z2 > 20) {
+                  const scale = fov / z2;
+                  const screenX = centerX + x1 * scale;
+                  const screenY = centerY + y1 * scale;
+                  const projectedSize = Math.max(4, Math.min(32, state.fontSize * scale));
+
+                  renderList.push({
+                    ch: ch,
+                    col: grid.colors[idx],
+                    x: screenX,
+                    y: screenY,
+                    size: projectedSize,
+                    z: z2
+                  });
+                }
+              }
+            }
+          }
+
+          // Back-to-front depth sort for accurate 3D occlusion
+          renderList.sort((a, b) => b.z - a.z);
+
+          // Draw sorted 3D characters
+          let currentFont = '';
+          let lastCol = '';
+
+          for (let i = 0; i < renderList.length; i++) {
+            const p = renderList[i];
+            const fontStr = `${Math.round(p.size)}px 'JetBrains Mono', 'Fira Code', monospace`;
+            if (fontStr !== currentFont) {
+              ctx.font = fontStr;
+              currentFont = fontStr;
+            }
+            if (p.col !== lastCol) {
+              ctx.fillStyle = p.col;
+              lastCol = p.col;
+            }
+            ctx.fillText(p.ch, p.x, p.y);
+          }
+
+        } else {
+          // --- STANDARD FLAT 2D DRAW PASS ---
+          ctx.font = `${state.fontSize}px 'JetBrains Mono', 'Fira Code', 'Courier New', Courier, monospace`;
+          let lastColor = '';
+
+          for (let y = 0; y < rows; y++) {
+            const yPos = y * charHeight;
+            for (let x = 0; x < cols; x++) {
+              const idx = x + y * cols;
+              const ch = grid.chars[idx];
+              if (ch !== ' ') {
+                const col = grid.colors[idx];
+                if (col !== lastColor) {
+                  ctx.fillStyle = col;
+                  lastColor = col;
+                }
+                ctx.fillText(ch, x * charWidth, yPos);
+              }
+            }
+          }
+        }
+      }
+
+      // --- UI CONTROLS & LISTENERS ---
+      document.getElementById('sketchModePills').addEventListener('click', (e) => {
+        const btn = e.target.closest('.pill-btn');
+        if (!btn) return;
+        document.querySelectorAll('#sketchModePills .pill-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        state.mode = btn.getAttribute('data-mode');
+
+        if (state.mode === 'youtube' && !state.isCapturingYT) {
+          captureYouTubeTab();
+        } else {
+          showToast(`Sketch: ${btn.textContent}`);
+        }
+      });
+
+      document.getElementById('charsetSelect').addEventListener('change', (e) => {
+        state.charset = e.target.value;
+        showToast(`Engine: ${e.target.options[e.target.selectedIndex].text}`);
+      });
+
+      document.getElementById('colorModeSelect').addEventListener('change', (e) => {
+        state.colorMode = e.target.value;
+        showToast(`Color: ${e.target.options[e.target.selectedIndex].text}`);
+      });
+
+      document.getElementById('holoDepthSlider').addEventListener('input', (e) => {
+        state.holoDepth = parseFloat(e.target.value);
+      });
+
+      document.getElementById('ditherSlider').addEventListener('input', (e) => {
+        state.ditherContrast = parseFloat(e.target.value);
+      });
+
+      document.getElementById('saturationSlider').addEventListener('input', (e) => {
+        state.saturation = parseFloat(e.target.value);
+      });
+
+      const sensitivitySlider = document.getElementById('sensitivitySlider');
+      if (sensitivitySlider) {
+        sensitivitySlider.addEventListener('input', (e) => {
+          state.sensitivity = parseFloat(e.target.value);
+        });
+      }
+
+      const densitySlider = document.getElementById('densitySlider');
+      if (densitySlider) {
+        densitySlider.addEventListener('input', (e) => {
+          state.fontSize = parseInt(e.target.value);
+          resize();
+        });
+      }
+
+      const chromaToggle = document.getElementById('chromaToggle');
+      if (chromaToggle) {
+        chromaToggle.addEventListener('change', (e) => {
+          state.chromaSplit = e.target.checked;
+        });
+      }
+
+      const scanlineToggle = document.getElementById('scanlineToggle');
+      if (scanlineToggle) {
+        scanlineToggle.addEventListener('change', (e) => {
+          state.scanlines = e.target.checked;
+          if (scanlineOverlay) scanlineOverlay.style.opacity = state.scanlines ? '0.35' : '0';
+        });
+      }
+
+      // 3D Hologram Button Toggle
+      if (btnToggleHolo) {
+        btnToggleHolo.addEventListener('click', () => {
+          state.hologram3D = !state.hologram3D;
+          updateHoloUI();
+          showToast(state.hologram3D ? '⟁ 3D Hologram Depth Field Enabled' : 'Flat 2D View Enabled');
+        });
+      }
+
+      const btnReset3DCam = document.getElementById('btnReset3DCam');
+      if (btnReset3DCam) {
+        btnReset3DCam.addEventListener('click', reset3DCamera);
+      }
+
+      if (btnCaptureYT) {
+        btnCaptureYT.addEventListener('click', () => {
+          if (state.isCapturingYT) {
+            stopYouTubeCapture();
+          } else {
+            captureYouTubeTab();
+          }
+        });
+      }
+
+      if (btnToggleMic) {
+        btnToggleMic.addEventListener('click', () => {
+          if (state.isListening && !state.isCapturingYT) {
+            stopMicrophone();
+          } else {
+            activateMicrophone();
+          }
+        });
+      }
+
+      const modalCaptureYTBtn = document.getElementById('modalCaptureYTBtn');
+      if (modalCaptureYTBtn) {
+        modalCaptureYTBtn.addEventListener('click', () => {
+          captureYouTubeTab();
+        });
+      }
+
+      const modalMicBtn = document.getElementById('modalMicBtn');
+      if (modalMicBtn) {
+        modalMicBtn.addEventListener('click', () => {
+          if (startModal) startModal.classList.add('hidden');
+          activateMicrophone();
+        });
+      }
+
+      const btnFullscreen = document.getElementById('btnFullscreen');
+      if (btnFullscreen) {
+        btnFullscreen.addEventListener('click', () => {
+          if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen();
+          } else {
+            if (document.exitFullscreen) document.exitFullscreen();
+          }
+        });
+      }
+
+      function togglePanel() {
+        controlPanel.classList.toggle('minimized');
+        const isMin = controlPanel.classList.contains('minimized');
+        togglePanelBtn.textContent = isMin ? 'SHOW CONTROLS [H]' : 'HIDE CONTROLS [H]';
+      }
+
+      togglePanelBtn.addEventListener('click', togglePanel);
+
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'h' || e.key === 'H') togglePanel();
+        if (e.key === 'f' || e.key === 'F') document.getElementById('btnFullscreen').click();
+        if (e.key === 'z' || e.key === 'Z') btnToggleHolo.click();
+        if (e.key === 'r' || e.key === 'R') reset3DCamera();
+        if (e.key === 'y' || e.key === 'Y') btnCaptureYT.click();
+        if (e.key === '0') document.querySelector('[data-mode="youtube"]').click();
+        if (e.key === '1') document.querySelector('[data-mode="ambientField"]').click();
+        if (e.key === '2') document.querySelector('[data-mode="torus"]').click();
+        if (e.key === '3') document.querySelector('[data-mode="cymatics"]').click();
+        if (e.key === '4') document.querySelector('[data-mode="oscilloscope"]').click();
+        if (e.key === '5') document.querySelector('[data-mode="tunnel"]').click();
+      });
+
+      resize();
+      updateHoloUI();
+      requestAnimationFrame(loop);
+
+    })();
+  </script>
+</body>
+</html>
